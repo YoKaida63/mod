@@ -1,0 +1,155 @@
+run(function()
+    local AutoLegitFarm
+    local RandomQueue
+    local AutoMovement
+    
+    -- Anti-AFK
+    local function disableAfk()
+        pcall(function()
+            for _, v in getconnections(lplr.Idled) do
+                v:Disconnect()
+            end
+        end)
+    end
+
+    -- キュー参加機能
+    local function joinQueue()
+        local state = bedwars.Store:getState()
+        if state.Party.leader.userId == lplr.UserId and state.Party.queueState == 0 then
+            if RandomQueue.Enabled then
+                local listofmodes = {}
+                for i, v in bedwars.QueueMeta do
+                    if not v.disabled and not v.voiceChatOnly and not v.rankCategory then
+                        table.insert(listofmodes, i)
+                    end
+                end
+                if #listofmodes > 0 then
+                    bedwars.QueueController:joinQueue(listofmodes[math.random(1, #listofmodes)])
+                else
+                    bedwars.QueueController:joinQueue(store.queueType)
+                end
+            else
+                bedwars.QueueController:joinQueue(store.queueType)
+            end
+        end
+    end
+
+    -- 剣を取得 (ベースコードのgetSwordとは別に簡易版を用意)
+    local function getMySword()
+        local inv = store.inventory and store.inventory.inventory and store.inventory.inventory.items
+        if not inv then return nil end
+        for _, item in pairs(inv) do
+            if item.itemType and string.find(item.itemType:lower(), "sword") then
+                return item.itemType
+            end
+        end
+        return nil
+    end
+
+    AutoLegitFarm = vape.Categories.Utility:CreateModule({
+        Name = "AutoLegitFarm",
+        Function = function(callback)
+            if callback then
+                disableAfk()
+                
+                -- メインループ
+                task.spawn(function()
+                    local moveTimer = 0
+                    local camTimer = 0
+                    
+                    while AutoLegitFarm.Enabled do
+                        task.wait(0.1)
+                        disableAfk()
+                        
+                        local state = bedwars.Store:getState()
+                        local matchState = state.Game.matchState
+                        
+                        -- 試合中のレジット行動 (剣振り)
+                        if matchState == 1 then
+                            local sword = getMySword()
+                            if sword then
+                                pcall(function()
+                                    switchItem(sword, 0.1)
+                                    bedwars.SwordController:swingSwordAtMouse()
+                                end)
+                            end
+                        end
+                        
+                        -- AutoMovement ロジック (Humanoid:MoveTo使用)
+                        if AutoMovement.Enabled and entitylib.isAlive then
+                            local hum = entitylib.character.Humanoid
+                            local root = entitylib.character.RootPart
+                            
+                            -- MoveTo の更新 (0.5〜1.5秒ごとにランダムな地点へ)
+                            moveTimer = moveTimer - 0.1
+                            if moveTimer <= 0 then
+                                moveTimer = math.random(5, 15) / 10
+                                
+                                -- 現在位置からランダムなオフセットを計算
+                                local offsetX = math.random(-15, 15)
+                                local offsetZ = math.random(-15, 15)
+                                local targetPos = root.Position + Vector3.new(offsetX, 0, offsetZ)
+                                
+                                -- Humanoid:MoveTo で移動指示
+                                pcall(function()
+                                    hum:Move(targetPos)
+                                end)
+                            end
+                            
+                            -- カメラの自然な揺れ
+                            camTimer = camTimer - 0.1
+                            if camTimer <= 0 then
+                                camTimer = math.random(10, 30) / 10
+                                local rx = math.random(-3, 3) / 100
+                                local ry = math.random(-3, 3) / 100
+                                pcall(function()
+                                    gameCamera.CFrame = gameCamera.CFrame * CFrame.Angles(rx, ry, 0)
+                                end)
+                            end
+                        end
+                    end
+                end)
+
+                -- 試合終了時の再キュー
+                AutoLegitFarm:Clean(vapeEvents.MatchEndEvent.Event:Connect(function()
+                    task.wait(2)
+                    joinQueue()
+                end))
+
+                -- 死亡 + 試合終了時の再キュー
+                AutoLegitFarm:Clean(vapeEvents.EntityDeathEvent.Event:Connect(function(deathTable)
+                    if deathTable.entityInstance == lplr.Character then
+                        local state = bedwars.Store:getState()
+                        if state.Game.matchState == 2 then
+                            task.wait(2)
+                            joinQueue()
+                        end
+                    end
+                end))
+
+                -- ベッド破壊時の再キュー
+                AutoLegitFarm:Clean(vapeEvents.BedwarsBedBreak.Event:Connect(function(bedTable)
+                    local myTeam = tonumber(lplr:GetAttribute('Team'))
+                    local brokenTeam = tonumber(bedTable.brokenBedTeam.id)
+                    if myTeam and brokenTeam and myTeam == brokenTeam then
+                        task.wait(1.5)
+                        joinQueue()
+                    end
+                end))
+            end
+        end,
+        Tooltip = "Anti-AFK, legit farm, auto queue & Humanoid:MoveTo movement."
+    })
+
+    RandomQueue = AutoLegitFarm:CreateToggle({
+        Name = "Random Queue",
+        Default = true,
+        Tooltip = "Queues a random available mode instead of current mode."
+    })
+
+    AutoMovement = AutoLegitFarm:CreateToggle({
+        Name = "Auto Movement",
+        Default = false,
+        Tooltip = "Uses Humanoid:MoveTo to simulate natural wandering."
+    })
+end)
