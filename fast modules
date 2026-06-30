@@ -1,0 +1,51 @@
+	local FastModules
+	local speedMultiplier = 1.5
+	
+	local function enableFastMode()
+		-- Speed up global performance config
+		if getgenv().VapePerf then
+			-- Store originals
+			getgenv().VapePerf._originalConfig = {
+				MAX_HEARTBEAT_FPS = getgenv().VapePerf.config.MAX_HEARTBEAT_FPS,
+				MAX_RENDERSTEPPED_FPS = getgenv().VapePerf.config.MAX_RENDERSTEPPED_FPS,
+				ENTITY_CACHE_DURATION = getgenv().VapePerf.config.ENTITY_CACHE_DURATION,
+			}
+			
+			-- Increase all update rates
+			getgenv().VapePerf.config.MAX_HEARTBEAT_FPS = math.floor(getgenv().VapePerf.config.MAX_HEARTBEAT_FPS * speedMultiplier)
+			getgenv().VapePerf.config.MAX_RENDERSTEPPED_FPS = math.floor(getgenv().VapePerf.config.MAX_RENDERSTEPPED_FPS * speedMultiplier)
+			getgenv().VapePerf.config.ENTITY_CACHE_DURATION = getgenv().VapePerf.config.ENTITY_CACHE_DURATION / speedMultiplier
+		end
+		
+		-- Global speed multiplier
+		getgenv().VapeFastMode = speedMultiplier
+		
+		vape:CreateNotification("FastModules", "All modules running at "..math.floor(speedMultiplier*100).."% speed!", 5, "success")
+	end
+	
+	local function disableFastMode()
+		if getgenv().VapePerf and getgenv().VapePerf._originalConfig then
+			local orig = getgenv().VapePerf._originalConfig
+			getgenv().VapePerf.config.MAX_HEARTBEAT_FPS = orig.MAX_HEARTBEAT_FPS
+			getgenv().VapePerf.config.MAX_RENDERSTEPPED_FPS = orig.MAX_RENDERSTEPPED_FPS
+			getgenv().VapePerf.config.ENTITY_CACHE_DURATION = orig.ENTITY_CACHE_DURATION
+			getgenv().VapePerf._originalConfig = nil
+		end
+		
+		getgenv().VapeFastMode = 1
+		
+		vape:CreateNotification("FastModules", "Module speeds restored to normal.", 3)
+	end
+	
+	FastModules = vape.Categories.BoostFPS:CreateModule({
+		Name = 'FastModules',
+		Function = function(callback)
+			if callback then
+				enableFastMode()
+			else
+				disableFastMode()
+			end
+		end,
+		Tooltip = 'Makes all modules work faster - KillAura attacks faster, ESP updates faster, etc.'
+	})
+end)
